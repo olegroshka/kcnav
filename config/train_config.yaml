@@ -1,0 +1,65 @@
+# config/train_config.yaml (Additions/Modifications for Phase 3)
+experiment_name: "KCNav_TrainComplexityTransformer"
+
+# General
+seed: 42
+use_gpu: true
+dataloader_num_workers: 0 # 0 for main process, set to >0 for multiprocessing data loading if beneficial
+
+# Data
+dataset_path: "datasets/gsm8k" # Base for original problems
+# train_split_file: "train.jsonl" # Original GSM8K train
+# test_split_file: "test.jsonl"  # Original GSM8K test
+inference_source_file: "train.jsonl" # Used by inference_pipeline if run
+
+# --- NEW: Path to collected trajectories from Phase 2 ---
+complexity_training_data_path: "data/collected_trajectories/KCNav_DataCollection_Gemma2_9B" # Or your specific Phase 2 output folder/file
+complexity_train_only_successful: true # Train only on trajectories marked as successful
+complexity_train_val_split_ratio: 0.1  # 10% of loaded trajectory data points for validation
+complexity_train_limit_trajectories: 1000 # Optional: Limit number of trajectories to load for faster initial training/debugging (e.g., 200, 1000, or null for all)
+
+trajectory_output_dir: "data/collected_trajectories" # For inference runs
+
+# LLM Settings (Not directly used for training complexity model, but kept for completeness)
+llm_provider: "local"
+local_model_id: "google/gemma-2-9b-it"
+local_model_device_map: "auto"
+local_model_trust_remote_code: true
+local_model_torch_dtype: "auto"
+local_model_quantization: "4bit"
+llm_temperature: 0.1
+llm_max_new_tokens: 512
+
+# --- Complexity Model Settings ---
+complexity_model_type: "transformer" # Type of complexity model to train
+# Path to load a pre-trained complexity model (if any, for further training or inference)
+# For initial training, this might be null. For inference later, it will be the saved model.
+complexity_model_path: null
+# Path where the newly trained complexity model will be saved
+models_output_dir: "models" # Base directory for all saved models
+complexity_model_save_name: "complexity_transformer_gsm8k_v1.pt" # Name for the saved model
+
+# Transformer specific parameters
+# feature_dim is now calculated in train_complexity_model.py based on trajectory_processor.py
+# transformer_feature_dim: 6 # Should match STEP_TYPE_DIM + 3 (local_ncd, global_ncd, time_step)
+transformer_hidden_size: 128
+transformer_num_layers: 3 # Increased slightly
+transformer_nhead: 4
+transformer_dropout_rate: 0.15 # Increased slightly
+transformer_max_seq_len: 60 # Max steps in a trajectory to consider (for dataset and pos encoding)
+
+# NCD Calculation (Used by trajectory_processor)
+ncd_compressor: "zlib"
+
+# Agent Configuration (Not for this training script, but for context)
+# max_steps: 15
+# num_candidates_rerank: 1
+# enable_reflection: false
+
+# --- Training (Complexity Model - Transformer) ---
+training_batch_size: 32 # Can be larger if sequences are not too long and GPU permits
+training_num_epochs: 25 # Number of epochs to train the complexity model
+training_learning_rate: 1e-4
+grad_clip_norm: 1.0 # For gradient clipping
+complexity_loss_weight: 1.0 # Weight for NCD prediction loss
+success_loss_weight: 0.5    # Weight for trajectory success prediction loss

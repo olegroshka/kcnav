@@ -1,0 +1,11 @@
+torch
+transformers>=4.41.0
+accelerate>=0.29.3
+safetensors>=0.4.2
+bitsandbytes>=0.41 # For quantization of local models
+pyyaml>=6.0
+# sentencepiece # Often a dependency for tokenizers, transformers usually pulls it in
+# protobuf # Often a dependency for tokenizers, transformers usually pulls it in
+tqdm # For progress bars, good to have
+numpy
+

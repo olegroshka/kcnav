@@ -1,0 +1,3 @@
+This directory is intended to store trained complexity models.
+For Phase 1 (baseline), no models are trained or loaded, so this can be empty.
+This placeholder.txt file is just to ensure the directory can be committed if it's empty.

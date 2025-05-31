@@ -1,0 +1,82 @@
+# config/default_config.yaml
+experiment_name: "KCNav_Local_Baseline-phi3-128k" # Name of the experiment, used for logging and saving
+#experiment_name: "KCNav_Local_Baseline-deepseek-math-7b" # Name of the experiment, used for logging and saving
+
+# General
+seed: 42
+use_gpu: true # Critical for local LLM inference, relevant for PyTorch parts
+
+# Data
+dataset_path: "datasets/gsm8k" # Base path for dataset folder
+train_split_file: "train.jsonl" # Will be used in later phases
+test_split_file: "test.jsonl"   # Used in Phase 1 for baseline evaluation
+# Directory to save trajectories collected by the agent
+trajectory_output_dir: "data/collected_trajectories" # Base dir for all trajectory outputs
+
+
+# LLM Provider
+llm_provider: "local"  # "openai" or "local"
+
+# Local LLM Settings
+# Replace with your desired model. Ensure you have enough VRAM/RAM.
+# Small model for initial testing:
+#local_model_id: "microsoft/Phi-3-mini-4k-instruct"
+#local_model_id: "microsoft/Phi-3-small-8k-Instruct
+local_model_id: "microsoft/Phi-3-mini-128k-instruct"
+# Larger models (examples, uncomment and adjust if using):
+#local_model_id: "google/gemma-2-9b-it"
+# local_model_id: "ibm-granite/granite-8b-code-instruct" # Might require specific setup
+#local_model_id: "mistralai/Mistral-7B-Instruct-v0.3"
+#local_model_id: "deepseek-ai/deepseek-math-7b-base"
+
+local_model_device_map: "auto" # "auto", "cuda:0", "cpu". "auto" is good with accelerate.
+local_model_trust_remote_code: true # Set to true for models like Phi-3 that require it.
+local_model_torch_dtype: "auto" # "auto", "float16", "bfloat16". "auto" usually works.
+local_model_quantization: null # "4bit", "8bit", or null. "4bit" can save a lot of VRAM.
+
+llm_temperature: 0.1 # Lower for more deterministic baseline
+llm_max_new_tokens: 512 # Max tokens for the LLM to generate in one turn
+# max_tokens_critique: 400 # Not used in Phase 1 baseline
+attn_implementation: "eager"
+
+# Complexity Model (Not used actively in Phase 1)
+complexity_model_type: "placeholder" # Options: "transformer", "diffusion", "placeholder"
+complexity_model_path: null # Path to a pre-trained complexity model (if any)
+
+# --- Parameters for actual complexity models (used if type is not placeholder) ---
+# Transformer specific (example, used if complexity_model_type is "transformer")
+transformer_feature_dim: 4
+transformer_hidden_size: 128
+transformer_num_layers: 2
+transformer_nhead: 4
+# Diffusion specific (placeholders, used if complexity_model_type is "diffusion")
+diffusion_seq_len: 50
+diffusion_feature_dim: 2 # e.g., [local_ncd, global_ncd]
+diffusion_hidden_size: 128
+
+# NCD Calculation (Calculated but not used for guidance in Phase 1)
+ncd_compressor: "zlib" # 'zlib', 'bz2', 'lzma'
+track_local_ncd: true
+track_global_ncd: true # Uses compressed length of history
+
+# Agent Configuration (Baseline Settings for Phase 1)
+max_steps: 10 # Max reasoning steps per problem
+num_candidates_rerank: 1 # Must be 1 to disable re-ranking for baseline
+enable_reflection: false # Must be false to disable reflection for baseline
+
+# Inference Settings
+inference_limit: 5 # Number of problems to process from the test set. Keep small for initial local model testing.
+inference_start_index: 0 # 0-based index to start processing from in the test set
+
+# --- Settings for Training Phases (not used for Phase 1 inference) ---
+# Training (Complexity Model)
+training_batch_size: 16
+training_num_epochs: 10
+training_learning_rate: 1e-4
+# training_warmup_steps: 100 # Example
+# training_eval_steps: 500 # Example
+
+# Training (Agent - Placeholder for RL/Finetuning)
+# agent_training_enabled: false
+# agent_learning_rate: 5e-5
+# agent_batch_size: 4

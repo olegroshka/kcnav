@@ -1,0 +1,57 @@
+# config/default_config.yaml (Changes for Phase 2 Data Collection)
+experiment_name: "KCNav_DataCollection_Gemma2_9B" # More descriptive
+
+# General
+seed: 42
+use_gpu: true
+
+# Data
+dataset_path: "datasets/gsm8k"
+# train_split_file: "train.jsonl" # Still good to define for other potential uses
+# test_split_file: "test.jsonl"  # Still good to define for other potential uses
+inference_source_file: "train.jsonl" # Source file for data collection
+
+trajectory_output_dir: "data/collected_trajectories"
+
+# LLM Provider & Local LLM Settings
+llm_provider: "local"
+local_model_id: "ibm-granite/granite-3.1-8b-instruct" # Or your preferred model that worked
+local_model_device_map: "auto"
+local_model_trust_remote_code: true
+local_model_torch_dtype: "auto"
+local_model_quantization: "4bit" # <<< Recommended for faster data collection
+llm_temperature: 0.1
+llm_max_new_tokens: 512
+
+# Complexity Model (Still placeholder)
+complexity_model_type: "placeholder"
+complexity_model_path: null
+
+# NCD Calculation
+ncd_compressor: "zlib"
+track_local_ncd: true
+track_global_ncd: true
+
+# Agent Configuration
+max_steps: 15
+num_candidates_rerank: 1
+enable_reflection: false
+
+# Inference Settings FOR DATA COLLECTION
+# inference_limit: null # To process all problems in inference_source_file
+inference_limit: 2000  # Limit to 2000 samples for data collection
+inference_start_index: 0
+
+# --- Parameters for actual complexity models (used if type is not placeholder) ---
+transformer_feature_dim: 4
+transformer_hidden_size: 128
+transformer_num_layers: 2
+transformer_nhead: 4
+diffusion_seq_len: 50
+diffusion_feature_dim: 2
+diffusion_hidden_size: 128
+
+# --- Settings for Training Phases (not used for Phase 2 data collection run) ---
+training_batch_size: 16
+training_num_epochs: 10
+training_learning_rate: 1e-4
