@@ -65,7 +65,7 @@ def run_inference(config: dict):
         agent = ReActAgent(llm, ToolManager([CalculatorTool()]), NcdCalculator(config['ncd_compressor']),
                            get_complexity_model(config['complexity_model_type'], config.get('complexity_model_path'),
                                                 **cm_params),
-                           config['max_steps'], config['num_candidates_rerank'])
+                           config['max_steps'], config['num_candidates_rerank'], config)
     except Exception as e:
         print(f"FATAL Init Error: {e}"); traceback.print_exc(); sys.exit(1)
     print("Components initialized successfully.")

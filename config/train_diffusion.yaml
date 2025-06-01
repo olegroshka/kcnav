@@ -1,0 +1,89 @@
+# config/train_config.yaml (Additions/Modifications for Phase 3)
+experiment_name: "KCNav_TrainComplexityTransformer"
+
+# General
+seed: 42
+use_gpu: true
+dataloader_num_workers: 0 # 0 for main process, set to >0 for multiprocessing data loading if beneficial
+save_every_n_epochs_no_val: 10 # If no validation set, save every N epochs
+
+# Data
+dataset_path: "datasets/gsm8k" # Base for original problems
+# train_split_file: "train.jsonl" # Original GSM8K train
+# test_split_file: "test.jsonl"  # Original GSM8K test
+inference_source_file: "train.jsonl" # Used by inference_pipeline if run
+
+# --- Path to collected trajectories ---
+complexity_training_data_path:
+  - "data/collected_trajectories/Gemma2_9B"
+  - "data/collected_trajectories/Llama3_8B"
+complexity_train_only_successful: true # Train only on trajectories marked as successful
+complexity_train_val_split_ratio: 0.1  # 10% of loaded trajectory data points for validation
+complexity_train_limit_trajectories: 10000 # Optional: Limit number of trajectories to load for faster initial training/debugging (e.g., 200, 1000, or null for all)
+
+trajectory_output_dir: "data/collected_trajectories" # For inference runs
+
+# LLM Settings (Not directly used for training complexity model, but kept for completeness)
+llm_provider: "local"
+local_model_id: "google/gemma-2-9b-it"
+local_model_device_map: "auto"
+local_model_trust_remote_code: true
+local_model_torch_dtype: "auto"
+local_model_quantization: "4bit"
+llm_temperature: 0.1
+llm_max_new_tokens: 512
+
+
+# --- Complexity Model Settings ---
+complexity_model_type: "diffusion"
+
+# VAE Encoder + DDPM Denoiser parameters
+diffusion_seq_len: 60                # Max sequence length for VAE input, should match TrajectoryFeatureDataset max_seq_len
+                                     # and transformer_max_seq_len if features are shared.
+diffusion_feature_dim: 6             # Input feature dim for VAE encoder (STEP_TYPE_DIM + 3)
+diffusion_hidden_size: 128           # GRU hidden size in VAE encoder
+diffusion_latent_dim: 32             # Dimensionality of VAE latent space z0 (smaller than Transformer hidden)
+diffusion_denoiser_hidden_size: 256  # Width of MLP layers in DDPM denoiser
+diffusion_timesteps: 1000            # T in DDPM (number of noising steps)
+
+# DDPM Noise Schedule
+diffusion_beta_start: 0.0001
+diffusion_beta_end: 0.02
+
+# Loss Weights for VAE+DDPM
+diffusion_loss_weight_kl: 0.5       # Target KL weight
+diffusion_kl_warmup_epochs: 10      # Number of epochs to ramp up KL weight
+diffusion_loss_weight_eps: 1.0
+
+# Path to load a pre-trained complexity model (if any, for further training or inference)
+# For initial training, this might be null. For inference later, it will be the saved model.
+complexity_model_path: null
+
+# Path where the newly trained complexity model will be saved
+models_output_dir: "models" # Base directory for all saved models
+complexity_model_save_name: "complexity_diffusion_kcnav_v101.pt" # Name for the saved model
+
+# Transformer specific parameters
+# feature_dim is now calculated in train_complexity_model.py based on trajectory_processor.py
+# transformer_feature_dim: 6 # Should match STEP_TYPE_DIM + 3 (local_ncd, global_ncd, time_step)
+transformer_hidden_size: 128
+transformer_num_layers: 3 # Increased slightly
+transformer_nhead: 4
+transformer_dropout_rate: 0.15 # Increased slightly
+transformer_max_seq_len: 60 # Max steps in a trajectory to consider (for dataset and pos encoding)
+
+# NCD Calculation (Used by trajectory_processor)
+ncd_compressor: "zlib"
+
+# Agent Configuration (Not for this training script, but for context)
+# max_steps: 15
+# num_candidates_rerank: 1
+# enable_reflection: false
+
+# --- Training (Complexity Model - Transformer) ---
+training_batch_size: 32 # Can be larger if sequences are not too long and GPU permits
+training_num_epochs: 100 # Number of epochs to train the complexity model
+training_learning_rate: 1e-4 # Might need slight adjustment for different data/res
+grad_clip_norm: 1.0 # For gradient clipping
+complexity_loss_weight: 1.0 # Weight for NCD prediction loss
+success_loss_weight: 0.5    # Weight for trajectory success prediction loss

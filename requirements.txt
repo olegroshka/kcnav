@@ -8,4 +8,4 @@ pyyaml>=6.0
 # protobuf # Often a dependency for tokenizers, transformers usually pulls it in
 tqdm # For progress bars, good to have
 numpy
-
+seaborn

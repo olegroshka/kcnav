@@ -59,11 +59,19 @@ def get_complexity_model(model_type: str, model_path: Optional[str] = None, devi
             print(f"Transformer model path '{model_path}' not found or not provided. Using fresh/untrained Transformer skeleton.")
         return model
 
+#    diffusion_seq_len: 60  # Max sequence length for VAE input, should match TrajectoryFeatureDataset max_seq_len
+                            # and transformer_max_seq_len if features are shared.
+#     diffusion_feature_dim: 6  # Input feature dim for VAE encoder (STEP_TYPE_DIM + 3)
+#     diffusion_hidden_size: 128  # GRU hidden size in VAE encoder
+#     diffusion_latent_dim: 32  # Dimensionality of VAE latent space z0 (smaller than Transformer hidden)
+#     diffusion_denoiser_hidden_size: 256  # Width of MLP layers in DDPM denoiser
+#     diffusion_timesteps: 1000  # T in DDPM (number of noising steps)
+
     elif model_type.lower() == "diffusion":
         model = ComplexityDiffusionModel(
             seq_len=kwargs.get('diffusion_seq_len', 50),
             feature_dim=kwargs.get('diffusion_feature_dim', 2),
-            hidden_size=kwargs.get('diffusion_hidden_size', 128)
+            denoiser_hidden_size=kwargs.get('diffusion_denoiser_hidden_size', 128)
         ).to(resolved_device)
         if model_path and os.path.exists(model_path):
             model.load_model(model_path, device=resolved_device)

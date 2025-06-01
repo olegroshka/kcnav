@@ -1,5 +1,5 @@
 # config/default_config.yaml (Changes for Phase 2 Data Collection)
-experiment_name: "KCNav_DataCollection_Gemma2_9B" # More descriptive
+experiment_name: "KCNav_DataCollection_granite3_8b" # More descriptive
 
 # General
 seed: 42

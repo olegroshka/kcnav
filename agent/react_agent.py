@@ -1,4 +1,5 @@
 # agent/react_agent.py
+import math
 import time
 import re
 from typing import Optional, Tuple, List, Dict, Any
@@ -17,7 +18,8 @@ class ReActAgent:
                  ncd_calculator: NcdCalculator,
                  complexity_model: ComplexityModelInterface,  # Will be Placeholder for Phase 1
                  max_steps: int = 10,
-                 num_candidates_rerank: int = 1):  # Default to 1 for Phase 1 baseline
+                 num_candidates_rerank: int = 1,
+                 cfg: Dict = {}):  # Default to 1 for Phase 1 baseline
 
         self.llm = llm
         self.tool_manager = tool_manager
@@ -26,6 +28,9 @@ class ReActAgent:
         self.max_steps = max_steps
         self.num_candidates_rerank = max(1, num_candidates_rerank)  # Ensure at least 1
         self.use_reranking = self.num_candidates_rerank > 1
+        self.cm_risk_low = cfg.get("complexity_risk_low", 0.0)
+        self.cm_risk_high = cfg.get("complexity_risk_high", float("inf"))
+        self.cm_gamma = cfg.get("complexity_gamma", 0.01)
 
         print(f"ReActAgent Initialized:")
         print(f"  LLM Provider: {llm.llm_provider}")
@@ -84,7 +89,58 @@ class ReActAgent:
                   "Critique:")
         return prompt
 
-    def _select_best_candidate(self, trajectory: Trajectory, candidates_text: List[str]) -> str:
+    def _select_best_candidate(
+            self,
+            trajectory: "Trajectory",
+            candidates_text: List[str]
+    ) -> str:
+        """
+        1. ask the complexity model for a *score* (higher == better)
+           we interpret score = exp( -γ · risk )  →  risk = -ln(score)/γ
+        2. discard candidates whose risk is outside [risk_low, risk_high]
+        3. among survivors pick the highest-score one;
+           if none survive pick the overall lowest-risk candidate
+        """
+
+        if not candidates_text:  # should never happen
+            print("[ReAct] WARNING: 0 candidates; returning fallback string")
+            return "Error: LLM produced no candidate."
+
+        if len(candidates_text) == 1:  # nothing to rank
+            return candidates_text[0]
+
+        # score
+        try:
+            scores = self.complexity_model.score_candidates(
+                trajectory, candidates_text
+            )
+        except Exception as e:
+            print(f"[ReAct] complexity model failed ({e}) – using first cand.")
+            return candidates_text[0]
+
+        if len(scores) != len(candidates_text):
+            print("[ReAct] Score/candidate length mismatch – using first cand.")
+            return candidates_text[0]
+
+        #  risk ↔ score
+        gamma = self.cm_gamma # Default gamma value from config
+        risks = [-math.log(max(s, 1e-12)) / gamma for s in scores]
+
+        survivors = [
+            (c, r, s) for c, r, s in zip(candidates_text, risks, scores)
+            if self.cm_risk_low <= r <= self.cm_risk_high
+        ]
+
+        pick_from = survivors if survivors else list(
+            zip(candidates_text, risks, scores)
+        )
+
+        # highest score among the allowed set
+        best = max(pick_from, key=lambda t: t[2])[0]
+
+        return best
+
+    def _select_best_candidate_prev(self, trajectory: Trajectory, candidates_text: List[str]) -> str:
         # This is called if self.use_reranking is True.
         # For Phase 1 baseline, num_candidates_rerank is 1, so this won't select from multiple.
         if not candidates_text:

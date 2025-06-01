@@ -65,7 +65,25 @@ def main():
     extra_script_args = []  # Currently no CLI overrides passed to scripts via main.py
 
     if args.mode == "train_complexity":
-        script_rel_path = "training/train_complexity_model.py"
+        # Load config here to check complexity_model_type
+        try:
+            with open(config_path_abs, 'r') as f:
+                temp_config = yaml.safe_load(f)
+        except Exception as e:
+            print(f"ERROR: Could not load config {config_path_abs} to determine model type: {e}")
+            sys.exit(1)
+
+        model_type_to_train = temp_config.get('complexity_model_type', 'transformer').lower()
+        if model_type_to_train == "transformer":
+            script_rel_path = "training/train_transformer_complexity_model.py"  # Your renamed script
+        elif model_type_to_train == "diffusion":
+            script_rel_path = "training/train_diffusion_complexity_model.py"  # This new script
+        else:
+            print(f"ERROR: Unknown complexity_model_type '{model_type_to_train}' for training.")
+            sys.exit(1)
+
+        script_abs_path = os.path.join(PROJECT_ROOT, script_rel_path)
+        run_script(script_abs_path, config_path_abs, extra_script_args)
     elif args.mode == "train_agent":
         script_rel_path = "training/train_agent.py"
     elif args.mode == "inference":

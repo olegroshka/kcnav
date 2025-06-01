@@ -1,5 +1,5 @@
 # config/default_config.yaml (Changes for Phase 2 Data Collection)
-experiment_name: "KCNav_DataCollection_Llama3_8B" # More descriptive
+experiment_name: "KCNav_DataCollection_Qwen2_1_5B" # More descriptive
 
 # General
 seed: 42
@@ -15,7 +15,7 @@ trajectory_output_dir: "data/collected_trajectories"
 
 # LLM Provider & Local LLM Settings
 llm_provider: "local"
-local_model_id: "meta-llama/Meta-Llama-3-8B-Instruct" # Or your preferred model that worked
+local_model_id: "Qwen/Qwen2-1.5B-Instruct" # Or your preferred model that worked
 local_model_device_map: "auto"
 local_model_trust_remote_code: true
 local_model_torch_dtype: "auto"

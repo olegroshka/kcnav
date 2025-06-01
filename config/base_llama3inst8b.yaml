@@ -1,5 +1,5 @@
 # config/default_config.yaml (Changes for Phase 2 Data Collection)
-experiment_name: "KCNav_DataCollection_Llama3_8B" # More descriptive
+experiment_name: "Base_Llama3_8B" # More descriptive
 
 # General
 seed: 42
@@ -9,7 +9,7 @@ use_gpu: true
 dataset_path: "datasets/gsm8k"
 # train_split_file: "train.jsonl" # Still good to define for other potential uses
 # test_split_file: "test.jsonl"  # Still good to define for other potential uses
-inference_source_file: "train.jsonl" # Source file for data collection
+inference_source_file: "gsm8k_300.jsonl" # Source file for data collection
 
 trajectory_output_dir: "data/collected_trajectories"
 
