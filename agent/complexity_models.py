@@ -3,6 +3,7 @@ import os
 from typing import List, Dict, Any, Optional
 import torch
 
+from data.trajectory_processor import STEP_TYPE_DIM
 from .complexity_model_interface import ComplexityModelInterface
 from .complexity_model_transformer import ComplexityTransformer
 from .complexity_model_diffusion import ComplexityDiffusionModel
@@ -47,10 +48,11 @@ def get_complexity_model(model_type: str, model_path: Optional[str] = None, devi
 
     if model_type.lower() == "transformer":
         model = ComplexityTransformer(
-            feature_dim=kwargs.get('transformer_feature_dim', 4),
+            feature_dim=kwargs.get('transformer_feature_dim', STEP_TYPE_DIM + 3),
             hidden_size=kwargs.get('transformer_hidden_size', 128),
             num_layers=kwargs.get('transformer_num_layers', 2),
-            nhead=kwargs.get('transformer_nhead', 4)
+            nhead=kwargs.get('transformer_nhead', 4),
+            max_seq_len_for_pos_encoding=kwargs.get('transformer_max_seq_len', 60),
         ).to(resolved_device) # Move to device after init
         if model_path and os.path.exists(model_path):
             print(f"Attempting to load Transformer model from {model_path}")

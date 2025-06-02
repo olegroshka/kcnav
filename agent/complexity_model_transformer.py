@@ -1,4 +1,6 @@
 # agent/complexity_model_transformer.py
+import zlib
+
 import torch
 import torch.nn as nn
 from typing import List, Dict, Any, Optional, Tuple
@@ -58,6 +60,7 @@ class ComplexityTransformer(nn.Module, ComplexityModelInterface):
 
         self.complexity_regressor = nn.Linear(hidden_size, 2)
         self.success_classifier = nn.Linear(hidden_size, 1)
+        self.ncd_calculator = NcdCalculator()  # Default compressor, can be overridden
 
         print(
             f"Initialized ComplexityTransformer: features_in={feature_dim}, hidden={hidden_size}, layers={num_layers}, heads={nhead}")
@@ -215,7 +218,154 @@ class ComplexityTransformer(nn.Module, ComplexityModelInterface):
         except Exception as e:
             print(f"  ERROR: Failed to load model from {path}: {e}.")
 
-    def score_candidates(self, current_trajectory: Trajectory, candidates_text: List[str],
+    def _step_type_one_hot(self, step_type: str) -> torch.Tensor:
+        """ Maps 'thought', 'action', 'observation' → one-hot 3-vector. """
+        mapping = {"thought": 0, "action": 1, "observation": 2}
+        idx = mapping.get(step_type.lower(), 0)
+        vec = torch.zeros(3, dtype=torch.float32)
+        vec[idx] = 1.0
+        return vec
+
+
+    def _get_attr(self, step, name, default=None):
+        if isinstance(step, dict):
+            return step.get(name, default)
+        return getattr(step, name, default)
+
+
+    @torch.no_grad()
+    def _prepare_sequence_tensor(self, trajectory) -> torch.Tensor:
+        """
+        Build a [seq_len, feature_dimfeature_dim] tensor for *any* trajectory-like object.
+
+        Works whether `trajectory` is:
+          • a Trajectory instance  (has .steps -> list[TrajectoryStep])
+          • or already a plain list[dict | TrajectoryStep]
+
+        Each element is turned into a 6-dim feature vector with
+        `_extract_step_features()`.  Sequence is **left-padded with zeros**
+        if shorter than `self.max_seq_len`.
+        """
+        steps = trajectory.steps if hasattr(trajectory, "steps") else trajectory
+        feats = []
+
+        for idx, step in enumerate(steps):
+            # skip dummy / synthetic steps that lack NCD data
+            meta = self._get_attr(step, "metadata", {})
+            if ("ncd_local" not in meta) and ("ncd_global" not in meta):
+                continue
+            feats.append(self._extract_step_features(step, idx))
+
+        # pad / trim
+        if len(feats) == 0:  # all steps filtered
+            feats = [torch.zeros(self.feature_dim)]
+
+        seq = torch.stack(feats, dim=0)  # [L,6]
+
+        if seq.size(0) < self.max_seq_len:  # left-pad
+            pad = torch.zeros(self.max_seq_len - seq.size(0),
+                              self.feature_dim, device=seq.device)
+            seq = torch.cat([pad, seq], dim=0)
+        else:  # keep the most recent
+            seq = seq[-self.max_seq_len:]
+
+        return seq  # [max_seq_len, 6]
+
+    def _extract_step_features(self, step, idx) -> torch.Tensor:
+        """
+        6-D vector: one-hot(step_type) (3) | ncd_local | log1p(ncd_global) | idx/L
+        """
+        step_type = self._get_attr(step, "step_type", "thought")
+        meta = self._get_attr(step, "metadata", {})
+        ncd_local = float(meta.get("ncd_local", 0.0))
+        ncd_global = float(meta.get("ncd_global", 0.0))
+
+        one_hot = self._step_type_one_hot(step_type)  # [3]
+        extra = torch.tensor([ncd_local,
+                              math.log1p(ncd_global),
+                              idx / self.max_seq_len])
+
+        return torch.cat([one_hot, extra])  # [6]
+
+
+    @torch.no_grad()
+    def score_candidates(
+            self,
+            trajectory,  # Trajectory instance  *or*  list[dict]
+            candidates_text: List[str]
+    ) -> List[float]:
+        """
+        Return one scalar score per candidate (higher = better).
+
+        Internally we:
+          1. Build a *hypothetical* trajectory in which the candidate
+             becomes the next ThoughtAction step.
+          2. Convert that trajectory into a fixed-length feature tensor
+             with `_prepare_sequence_for_scoring(...)`.
+          3. Run the forward pass and take `sigmoid(success_logit)` as
+             P(success│trajectory+candidate).
+
+        The method never needs an external NCD-calculator – it uses the
+        one that was constructed when the model was initialised
+        (`self.ncd_calculator`).
+        """
+
+        # ---------- quick exits ------------------------------------------------
+        if not candidates_text:
+            return []
+
+        if not hasattr(self, "input_embedding"):
+            # model not initialised / state-dict not loaded
+            return [0.0] * len(candidates_text)
+
+        self.eval()  # just to be explicit
+        device = next(self.parameters()).device
+
+        scores: List[float] = []
+        ncd_calc = self.ncd_calculator  # local shortcut
+
+        # ----------------------------------------------------------------------
+        # iterate over the K candidate continuations
+        # ----------------------------------------------------------------------
+        for cand_txt in candidates_text:
+            prep = self._prepare_sequence_for_scoring(
+                current_trajectory=trajectory,
+                candidate_step_text=cand_txt,
+                ncd_calculator=ncd_calc
+            )
+
+            # _prepare_sequence_for_scoring can return None if it cannot
+            # build a sequence (e.g. totally missing NCD info).  Give such
+            # candidates a neutral / very small score so the agent can fall
+            # back to "first candidate".
+            if prep is None:
+                scores.append(0.0)
+                continue
+
+            seq_tensor, pad_mask = prep  # [1,T,F], [1,T]
+            seq_tensor = seq_tensor.to(device)
+            pad_mask = pad_mask.to(device)
+
+            # forward pass – we only need the success-logit head
+            _, success_logit = self.forward(seq_tensor, padding_mask=pad_mask)
+            success_prob = torch.sigmoid(success_logit).item()
+
+            # guard against NaNs (can happen with uninitialised weights)
+            if math.isnan(success_prob):
+                success_prob = 0.0
+
+            scores.append(float(success_prob))
+
+        # final sanity-check
+        if len(scores) != len(candidates_text):
+            # this should never happen, but keep behaviour predictable
+            while len(scores) < len(candidates_text):
+                scores.append(0.0)
+            scores = scores[:len(candidates_text)]
+
+        return scores
+
+    def score_candidates_old(self, current_trajectory: Trajectory, candidates_text: List[str],
                          ncd_calculator: NcdCalculator) -> List[float]:
         if not hasattr(self, 'input_embedding'):
             print("Warning: ComplexityTransformer seems uninitialized. Returning dummy scores.")

@@ -111,9 +111,7 @@ class ReActAgent:
 
         # score
         try:
-            scores = self.complexity_model.score_candidates(
-                trajectory, candidates_text
-            )
+            scores = self.complexity_model.score_candidates(trajectory, candidates_text)
         except Exception as e:
             print(f"[ReAct] complexity model failed ({e}) – using first cand.")
             return candidates_text[0]

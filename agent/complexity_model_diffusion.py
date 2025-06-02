@@ -70,6 +70,7 @@ class ComplexityDiffusionModel(nn.Module, ComplexityModelInterface):
         self.gru_hidden_size = gru_hidden_size
         self.latent_dim = latent_dim
         self.T = diffusion_timesteps
+        self.ncd_calculator = NcdCalculator()  # Default NCD calculator
 
         self.encoder_rnn = nn.GRU(
             input_size=self.feature_dim_in,
@@ -189,8 +190,13 @@ class ComplexityDiffusionModel(nn.Module, ComplexityModelInterface):
                 feats = feats[:self.feature_dim_in]
         return feats
 
-    def _prepare_hypothetical_sequence_tensor(self, current_traj: Trajectory, candidate_text: Optional[str],
-                                              ncd_calc: NcdCalculator, device: torch.device) -> Optional[torch.Tensor]:
+    def _prepare_hypothetical_sequence_tensor(
+            self,
+            current_traj:
+            Trajectory,
+            candidate_text: Optional[str],
+            ncd_calc: NcdCalculator,
+            device: torch.device) -> Optional[torch.Tensor]:
         all_feats = []
         last_content_for_ncd_construction = current_traj.problem_statement
         current_hist_text_for_ncd_construction = f"Problem: {last_content_for_ncd_construction}"
@@ -333,8 +339,55 @@ class ComplexityDiffusionModel(nn.Module, ComplexityModelInterface):
         return feat
 
 
+    # ------------------------------------------------------------------
+    #  ComplexityDiffusionModel: improved candidate-scoring
+    # ------------------------------------------------------------------
     @torch.no_grad()
     def score_candidates(
+        self,
+        trajectory: "Trajectory",
+        candidates_text: List[str]
+    ) -> List[float]:
+        """
+        Return one scalar score per candidate (higher = better).
+
+        • A hypothetical feature sequence is built for `trajectory + candidate`.
+        • The VAE encoder returns μ  (shape  [1, latent_dim]).
+        • Risk  =  ‖μ‖²
+        • Score =  exp(-γ · risk)   with γ = self.gamma  (default 1 e-2).
+
+        If an individual candidate cannot be encoded (rare), it receives score 0.0.
+        """
+        # -------- guard clauses ---------------------------------------
+        if not candidates_text:
+            return []
+
+        gamma  = getattr(self, "gamma", 0.01)
+        device = next(self.parameters()).device
+        self.eval()
+
+        scores: List[float] = []
+        for cand_text in candidates_text:
+            # build hypothetical trajectory  (→ tensor  [1,L,F])
+            seq_tensor = self._prepare_hypothetical_sequence_tensor(
+                current_traj  = trajectory,
+                candidate_text = cand_text,
+                ncd_calc       = self.ncd_calculator,
+                device         = device,
+            )
+            if seq_tensor is None:
+                scores.append(0.0)
+                continue
+
+            # VAE encoder → latent μ
+            mu, _ = self.encode(seq_tensor)              # [1, D]
+            risk   = torch.norm(mu, p=2).square().item() # ‖μ‖²
+            scores.append(math.exp(-gamma * risk))
+
+        return scores
+
+    @torch.no_grad()
+    def score_candidates_old(
             self,
             trajectory,
             candidates_text,

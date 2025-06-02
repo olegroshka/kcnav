@@ -1,5 +1,5 @@
 # config/default_config.yaml (Changes for Phase 2 Data Collection)
-experiment_name: "Transformer_Guided_Gemma2_9B" # More descriptive
+experiment_name: "Diffusion_Guided_Llama3_8B" # More descriptive
 
 # General
 seed: 42
@@ -15,7 +15,7 @@ trajectory_output_dir: "data/collected_trajectories"
 
 # LLM Provider & Local LLM Settings
 llm_provider: "local"
-local_model_id: "google/gemma-2-9b-it" # Or your preferred model that worked
+local_model_id: "meta-llama/Meta-Llama-3-8B-Instruct" # Or your preferred model that worked
 local_model_device_map: "auto"
 local_model_trust_remote_code: true
 local_model_torch_dtype: "auto"
@@ -24,8 +24,8 @@ llm_temperature: 0.1
 llm_max_new_tokens: 512
 
 # Complexity Model
-complexity_model_type: "transformer"
-complexity_model_path: "models/complexity_transformer_kcnav_v1.pt"
+complexity_model_type: "diffusion"
+complexity_model_path: "models/complexity_diffusion_kcnav_v101_best.pt"
 
 # react loop complexity ranking parameters
 complexity_risk_low:  2.0     # discard steps that are *too trivial*
@@ -48,12 +48,13 @@ inference_limit: 2000  # Limit to 2000 samples for data collection
 inference_start_index: 0
 
 # --- Parameters for actual complexity models (used if type is not placeholder) ---
+transformer_feature_dim: 4
 transformer_hidden_size: 128
-transformer_num_layers: 5 # Increased slightly
-transformer_nhead: 8 # Number of attention heads
-transformer_dropout_rate: 0.2 # Increased slightly
-transformer_feature_dim: 6 # Should match STEP_TYPE_DIM + 3 (local_ncd, global_ncd, time_step)
-transformer_max_seq_len: 50 # Max steps in a trajectory to consider (for dataset and pos encoding)
+transformer_num_layers: 2
+transformer_nhead: 4
+diffusion_seq_len: 50
+diffusion_feature_dim: 2
+diffusion_hidden_size: 128
 
 # --- Settings for Training Phases (not used for Phase 2 data collection run) ---
 training_batch_size: 16
